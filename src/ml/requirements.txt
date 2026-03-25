@@ -1,0 +1,52 @@
+# Baby Monitor — ML pipeline dependencies
+# Python 3.11+ required
+#
+# Install on Raspberry Pi 4:
+#   pip install -r src/ml/requirements.txt
+#
+# NOTE: tflite-runtime is the correct package for production deployment on RPi.
+# Do NOT install the full 'tensorflow' package on a Pi — it is too large and
+# does not include optimised ARM delegates.  The full package is listed below
+# as a dev/training alternative only.
+#
+# Pinned versions tested against Raspberry Pi OS Bookworm (Debian 12),
+# Python 3.11, aarch64.
+
+# -----------------------------------------------------------------------
+# Audio capture
+# -----------------------------------------------------------------------
+pyaudio==0.2.14
+
+# -----------------------------------------------------------------------
+# Audio feature extraction
+# -----------------------------------------------------------------------
+librosa==0.10.2
+numba==0.59.1          # librosa JIT backend; pin to avoid ABI breakage on ARM
+soundfile==0.12.1      # librosa audio I/O backend
+numpy==1.26.4          # must be compatible with numba and tflite-runtime
+
+# -----------------------------------------------------------------------
+# TFLite inference (production — RPi)
+# -----------------------------------------------------------------------
+# Use the Debian/pip wheel for aarch64:
+#   pip install tflite-runtime --extra-index-url https://google-coral.github.io/py-repo/
+# OR install via apt on Pi OS Bookworm:
+#   apt install python3-tflite-runtime
+#
+# Version constraint: >=2.14 for XNNPACK delegate with INT8 support on ARM.
+tflite-runtime==2.14.0
+
+# -----------------------------------------------------------------------
+# TFLite inference (development / training — non-RPi only)
+# -----------------------------------------------------------------------
+# Uncomment on a dev machine for model training and export.
+# DO NOT install on Raspberry Pi — package is ~500MB and conflicts with
+# tflite-runtime.
+#
+# tensorflow==2.16.1
+
+# -----------------------------------------------------------------------
+# Utilities
+# -----------------------------------------------------------------------
+# scipy is used by librosa internally; pin to avoid binary incompatibility.
+scipy==1.13.1

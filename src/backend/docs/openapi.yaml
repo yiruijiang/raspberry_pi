@@ -1,0 +1,373 @@
+openapi: "3.1.0"
+info:
+  title: Baby Monitor API
+  version: "1.0.0"
+  description: |
+    Streaming and alert API for the Raspberry Pi baby monitor.
+
+    **Authentication**: All endpoints except `/healthz` and `/v1/auth/token`
+    require a Bearer JWT in the `Authorization` header.  WebSocket endpoints
+    accept the token as a `?token=` query parameter.
+
+    **Obtain a token**: `POST /v1/auth/token` with HTTP Basic credentials
+    (username/password configured via `MONITOR_USERNAME` / `MONITOR_PASSWORD`
+    environment variables on the Pi).
+
+servers:
+  - url: "http://raspberrypi.local:8000"
+    description: "Pi on local network (HTTP development)"
+  - url: "https://raspberrypi.local"
+    description: "Pi on local network (HTTPS production)"
+
+tags:
+  - name: health
+    description: Liveness probe — no authentication required
+  - name: auth
+    description: Token issuance
+  - name: streaming
+    description: Live video and audio streams, stream health
+  - name: alerts
+    description: Real-time ML alert events
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security schemes
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "JWT obtained from POST /v1/auth/token"
+
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: "Used only on POST /v1/auth/token to obtain a JWT"
+
+  schemas:
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: Signed JWT
+        token_type:
+          type: string
+          enum: [bearer]
+        expires_in:
+          type: string
+          description: Token validity in seconds (string for broad client compatibility)
+          example: "43200"
+
+    StreamStatusResponse:
+      type: object
+      properties:
+        camera:
+          type: object
+          properties:
+            available:
+              type: boolean
+            backend:
+              type: string
+              nullable: true
+              enum: [picamera2, opencv, null]
+            resolution:
+              type: string
+              example: "640x480"
+            fps:
+              type: integer
+              example: 15
+        audio:
+          type: object
+          properties:
+            available:
+              type: boolean
+            backend:
+              type: string
+              nullable: true
+              enum: [pyaudio, null]
+            sample_rate:
+              type: integer
+              example: 16000
+            channels:
+              type: integer
+              example: 1
+            detail:
+              type: string
+              description: "Human-readable reason when available=false"
+        ws_clients:
+          type: integer
+          description: "Number of currently connected WebSocket clients"
+
+    AlertEvent:
+      type: object
+      required: [type, confidence, timestamp]
+      properties:
+        type:
+          type: string
+          enum: [cry, motion]
+          description: "Detection type from ML pipeline"
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          description: "Model confidence score (0–1)"
+          example: 0.87
+        timestamp:
+          type: string
+          format: date-time
+          description: "ISO 8601 UTC timestamp of the inference event"
+          example: "2026-03-25T02:14:33.123Z"
+
+    RecentAlertsResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertEvent"
+        total_buffered:
+          type: integer
+          description: "Total events currently in the in-memory buffer"
+
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  /healthz:
+    get:
+      tags: [health]
+      operationId: healthz
+      summary: Liveness probe
+      description: |
+        Always returns 200 if the process is alive.  Does NOT verify camera
+        or microphone availability — use `/v1/stream/status` for that.
+        No authentication required.
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /v1/auth/token:
+    post:
+      tags: [auth]
+      operationId: issueToken
+      summary: Issue JWT
+      description: |
+        Exchange HTTP Basic credentials for a Bearer JWT.  The token must be
+        included as `Authorization: Bearer <token>` on all subsequent requests,
+        or as `?token=<token>` for WebSocket connections.
+
+        Credentials are set via `MONITOR_USERNAME` / `MONITOR_PASSWORD`
+        environment variables on the Pi.
+      security:
+        - BasicAuth: []
+      responses:
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Bad credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/stream/video:
+    get:
+      tags: [streaming]
+      operationId: streamVideo
+      summary: MJPEG live video stream
+      description: |
+        Returns a `multipart/x-mixed-replace` MJPEG stream from the Pi camera.
+
+        Set this URL as the `src` of an `<img>` element — the browser renders
+        the stream natively with no JavaScript required.
+
+        Target performance:
+        - >= 15 fps at 640×480
+        - <= 1 second end-to-end latency on LAN
+
+        Returns 503 if the camera backend cannot be opened.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: MJPEG multipart stream
+          content:
+            multipart/x-mixed-replace:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Camera unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/stream/audio:
+    get:
+      tags: [streaming]
+      operationId: streamAudio
+      summary: Raw PCM live audio stream
+      description: |
+        Returns a chunked `audio/L16` stream (signed 16-bit little-endian PCM)
+        from the USB microphone.
+
+        Sample rate and channel count are configured via environment variables
+        (`AUDIO_SAMPLE_RATE`, `AUDIO_CHANNELS`) and reflected in the
+        `Content-Type` header, e.g.:
+        `audio/L16;rate=16000;channels=1`
+
+        Use the Web Audio API on the client to decode and play.
+
+        Returns 503 if the microphone cannot be opened.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Chunked PCM audio stream
+          content:
+            audio/L16:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Microphone unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/stream/status:
+    get:
+      tags: [streaming]
+      operationId: streamStatus
+      summary: Stream health status
+      description: |
+        Returns the current availability of the camera and microphone, plus
+        the number of connected WebSocket clients.
+
+        The frontend uses this to drive the stream health indicator badge.
+        Recommended poll interval: 5 seconds.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Stream health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamStatusResponse"
+        "401":
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/alerts/recent:
+    get:
+      tags: [alerts]
+      operationId: getRecentAlerts
+      summary: Recent alert events (REST)
+      description: |
+        Returns up to `limit` (max 50) most recent alert events from the
+        in-memory buffer.  Useful for page-load hydration without opening
+        a WebSocket connection.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 50
+          description: "Number of events to return (max 50)"
+      responses:
+        "200":
+          description: Recent alert events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecentAlertsResponse"
+        "401":
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ws/alerts:
+    get:
+      tags: [alerts]
+      operationId: wsAlerts
+      summary: WebSocket alert broadcast
+      description: |
+        WebSocket endpoint for real-time ML alert events.
+
+        **Connection URL**: `wss://<pi-host>/ws/alerts?token=<jwt>`
+
+        **On connect**: the server immediately sends all non-stale buffered
+        events (up to 50, filtered to events within the last 30 seconds) as
+        individual JSON text frames.
+
+        **Live events**: each new alert from the ML pipeline is forwarded
+        within 200ms as a JSON text frame conforming to the `AlertEvent`
+        schema.
+
+        **Delivery**: at-most-once per client.  The server does not retry
+        failed sends.  Reconnect with exponential back-off if disconnected.
+
+        **Staleness filter**: events older than 30 seconds are not delivered
+        to newly connected clients.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "JWT (required because browser WebSocket API does not support custom headers)"
+      responses:
+        "101":
+          description: WebSocket upgrade successful
+        "401":
+          description: Missing or invalid token query parameter

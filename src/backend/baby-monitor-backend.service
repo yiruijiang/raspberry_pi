@@ -1,0 +1,50 @@
+# systemd unit file for the Baby Monitor backend
+# Install: sudo cp baby-monitor-backend.service /etc/systemd/system/
+#          sudo systemctl daemon-reload
+#          sudo systemctl enable --now baby-monitor-backend
+
+[Unit]
+Description=Baby Monitor FastAPI Backend
+Documentation=file:///home/pi/baby-monitor/docs/design/backend-design.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/baby-monitor
+
+# Load .env file for secrets (never hardcode here)
+EnvironmentFile=-/home/pi/baby-monitor/src/backend/.env
+
+# Activate the venv and run uvicorn
+ExecStart=/home/pi/baby-monitor/.venv/bin/uvicorn \
+    src.backend.main:app \
+    --host ${HOST:-0.0.0.0} \
+    --port ${PORT:-8000} \
+    --ssl-certfile ${TLS_CERTFILE} \
+    --ssl-keyfile  ${TLS_KEYFILE}
+
+# Restart policy — recover from camera disconnects or OOM kills
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Resource limits (Pi 4B has 2–8 GB RAM; cap to leave headroom for ML)
+MemoryMax=512M
+CPUQuota=60%
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/tmp /home/pi/baby-monitor
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=baby-monitor-backend
+
+[Install]
+WantedBy=multi-user.target
