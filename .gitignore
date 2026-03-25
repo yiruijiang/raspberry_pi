@@ -1,0 +1,79 @@
+# Baby Monitor — Git Ignore Rules
+# ============================================================
+# Do not commit binary ML artifacts, raw datasets, or derived data.
+
+# ---------------------------------------------------------------------------
+# ML model binaries — never commit; use SCP/rsync to deploy to the Pi
+# ---------------------------------------------------------------------------
+*.tflite
+*.h5
+*.keras
+*.pb
+saved_model/
+*_saved/
+
+# Specific model paths
+src/ml/models/*.tflite
+src/ml/models/*.h5
+src/ml/models/*.pb
+src/ml/models/*_saved/
+data/cry_detector_saved/
+
+# ---------------------------------------------------------------------------
+# Training data — too large for git; sourced via data_prep.py
+# ---------------------------------------------------------------------------
+data/
+!data/.gitkeep
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+*.whl
+
+# Virtual environments
+.venv/
+.venv-training/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------------------
+# Jupyter
+# ---------------------------------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb
+
+# ---------------------------------------------------------------------------
+# Testing and coverage
+# ---------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# ---------------------------------------------------------------------------
+# Editor / OS artefacts
+# ---------------------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# TensorFlow / TF Hub cache (can be large; not project-specific)
+# ---------------------------------------------------------------------------
+/tmp/tfhub_modules/

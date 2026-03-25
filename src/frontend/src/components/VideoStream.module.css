@@ -1,0 +1,114 @@
+/*
+ * VideoStream.module.css
+ *
+ * Night-friendly feed display with status overlays.
+ * Aspect ratio preserved at 4:3 (640×480 Pi camera default).
+ */
+
+/* ── iOS Safari advisory banner ───────────────────────────────────────────────
+ * Non-blocking notice rendered above the feed on iOS devices.
+ * Uses muted amber tones to stay legible in the dark theme without being jarring.
+ * Remove this block once real-device iOS Safari testing confirms MJPEG works.
+ */
+.iosSafariWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  background-color: rgba(80, 60, 10, 0.55);
+  border: 1px solid rgba(200, 160, 30, 0.4);
+  border-radius: var(--radius-md);
+  /* Gentle fade-in matching the overlay animation */
+  animation: fadeIn 300ms ease forwards;
+}
+
+.iosSafariWarningIcon {
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  color: rgba(220, 180, 50, 0.9);
+  /* Align with first line of text */
+  line-height: 1.4;
+}
+
+.iosSafariWarningText {
+  font-size: var(--font-size-sm);
+  color: rgba(210, 185, 120, 0.95);
+  line-height: 1.4;
+}
+
+.container {
+  position: relative;
+  width: 100%;
+  /* Maintain 4:3 aspect ratio for the Pi camera default resolution (640×480).
+     If the backend changes resolution, update this value or use aspect-ratio. */
+  aspect-ratio: 4 / 3;
+  background-color: #0a0a14; /* darker than surface — letterbox background */
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* The MJPEG <img> element fills the container */
+.feed {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* letterbox rather than crop to preserve full frame */
+}
+
+/* Overlay shown during connecting / reconnecting / disconnected states */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(10, 10, 20, 0.75);
+  backdrop-filter: blur(2px);
+  /* Gentle fade-in — no sudden flash */
+  animation: fadeIn 300ms ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Status badge inside the overlay */
+.statusIndicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background-color: rgba(26, 26, 46, 0.9);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+/* Pulsing dot */
+.statusDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Dot color per status */
+[data-status="idle"]         .statusDot { background-color: var(--color-text-muted); }
+[data-status="connecting"]   .statusDot { background-color: var(--color-status-connecting);
+                                          animation: pulse 1.5s ease-in-out infinite; }
+[data-status="live"]         .statusDot { background-color: var(--color-status-live); }
+[data-status="reconnecting"] .statusDot { background-color: var(--color-status-reconnecting);
+                                          animation: pulse 1s ease-in-out infinite; }
+[data-status="disconnected"] .statusDot { background-color: var(--color-status-disconnected); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.statusText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}

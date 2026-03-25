@@ -185,6 +185,55 @@ to do the filtering, not them.
 
 ---
 
+## Video Stream Authentication
+
+**Decision**: Signed URL tokens (ADR-001, 2026-03-25). See
+`docs/specs/decisions/ADR-001-video-stream-auth.md` for full rationale.
+
+### Mechanism
+
+Browsers cannot attach `Authorization: Bearer` headers to `<img src="...">` requests.
+To authenticate the MJPEG video stream (and audio stream), the backend issues
+short-lived signed tokens delivered as URL query parameters.
+
+### Flow
+
+1. Frontend authenticates normally via `POST /v1/auth/login` and receives a JWT
+   Bearer token (existing flow, unchanged).
+2. Before mounting the video element, frontend calls
+   `POST /v1/auth/stream-token` with the Bearer token in the `Authorization` header.
+3. Backend validates the Bearer token, generates a signed stream token (60-second TTL),
+   and returns it in the response body.
+4. Frontend sets `<img src="/v1/stream/video?stream_token=<token>">`.
+5. Backend validates `stream_token` on the stream request. Invalid or expired tokens
+   receive a `401`.
+6. Frontend refreshes the stream token before expiry (at ~50 seconds) and updates the
+   `src` attribute to reconnect with the new token.
+
+### Stream Token Contract
+
+`POST /v1/auth/stream-token`
+- Request headers: `Authorization: Bearer <jwt>`
+- Response `200`:
+  ```json
+  { "stream_token": "<signed>", "expires_in": 60 }
+  ```
+- Response `401`: invalid or expired JWT.
+
+The stream token is validated on connection establishment only (not per-frame). Once
+the MJPEG connection is open and streaming, the token is not re-checked until
+reconnect.
+
+### Scope
+
+This applies to:
+- `GET /v1/stream/video` — video MJPEG stream
+- `GET /v1/stream/audio` — audio stream
+
+The Bearer token flow for all other API endpoints is unchanged.
+
+---
+
 ## Open Questions
 
 1. Should motion detection operate on full-frame diff or a configurable region-of-interest
@@ -196,5 +245,5 @@ to do the filtering, not them.
    (lost on restart) acceptable for v1?
 4. Is MJPEG sufficient for Phase 1, or do we need WebRTC for lower latency? MJPEG is
    simpler to implement but typically adds 200–500ms over WebRTC.
-5. Do we need authentication (PIN or password) on the stream endpoints, given the system
-   is LAN-only?
+5. ~~Do we need authentication on the stream endpoints?~~ **Resolved**: Yes, via signed
+   URL tokens. See ADR-001.

@@ -1,0 +1,2 @@
+- [Cry detection pipeline — design, API contract, status](project_cry_detection_pipeline.md) — TASK-201: Unix socket schema, config defaults, model shape, acceptance gate status
+- [RPi 4 hardware constraints applied in this codebase](project_rpi_constraints.md) — CPU/RAM/latency decisions made in src/ml/; packages chosen for ARM

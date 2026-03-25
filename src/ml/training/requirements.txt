@@ -1,0 +1,62 @@
+# Baby Monitor — ML Training Dependencies
+# Python 3.11+ required
+#
+# Run on a dev machine (Linux/macOS/Windows x86-64 or Apple Silicon).
+# Do NOT install on Raspberry Pi — TensorFlow is incompatible with the Pi's
+# tflite-runtime setup and would consume most of the Pi's RAM.
+#
+# Install:
+#   pip install -r src/ml/training/requirements.txt
+#
+# GPU (optional): If a CUDA GPU is available, TensorFlow will use it
+# automatically for embedding extraction.  CPU-only training is fully
+# supported and takes ~15 minutes on ESC-50 + Donate-a-cry.
+
+# ---------------------------------------------------------------------------
+# Core ML framework — training and TFLite conversion
+# ---------------------------------------------------------------------------
+# TF 2.13+ required for:
+#   - tf.lite.TFLiteConverter INT8 quantisation with SELECT_TF_OPS fallback
+#   - TF Hub YAMNet (yamnet/1) compatibility
+#   - tf.saved_model.save with concrete function signatures
+#
+# 2.16.x is the latest stable release with Keras 2 compatibility.
+# Pin to a minor version to avoid silent breaking changes between sessions.
+tensorflow==2.16.1
+
+# TensorFlow Hub — provides the pre-trained YAMNet model.
+tensorflow-hub==0.16.1
+
+# ---------------------------------------------------------------------------
+# Audio processing
+# ---------------------------------------------------------------------------
+# librosa — resampling, MFCC extraction, audio loading
+librosa==0.10.2
+
+# soundfile — fast WAV reading/writing (used by data_prep and load_wav_16k)
+soundfile==0.12.1
+
+# numba — librosa JIT backend; must be compatible with numpy version below
+numba==0.59.1
+
+# ---------------------------------------------------------------------------
+# Numerical computing
+# ---------------------------------------------------------------------------
+# Pin numpy to match tflite-runtime and numba constraints.
+# Do NOT upgrade past 1.x — TFLite 2.16 does not yet support numpy 2.x.
+numpy==1.26.4
+
+# scipy — used internally by librosa
+scipy==1.13.1
+
+# ---------------------------------------------------------------------------
+# Evaluation and metrics
+# ---------------------------------------------------------------------------
+# scikit-learn — classification_report, precision_recall_fscore_support
+scikit-learn==1.4.2
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+# tqdm — progress bars during embedding extraction
+tqdm==4.66.4

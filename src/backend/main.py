@@ -4,6 +4,7 @@ main.py — FastAPI application entrypoint for the Baby Monitor backend.
 Endpoints
 ---------
   POST /v1/auth/token           Issue a JWT (HTTP Basic → Bearer token)
+  POST /v1/auth/stream-token    Issue a short-lived stream token (ADR-001)
   GET  /v1/stream/video         MJPEG multipart live video stream
   GET  /v1/stream/audio         Raw PCM chunked live audio stream
   GET  /v1/stream/status        Stream health: camera + mic availability
@@ -13,6 +14,8 @@ Endpoints
 
 All endpoints except /healthz and /v1/auth/token require a valid JWT.
 WebSocket endpoints receive the token as ?token=<jwt> in the URL.
+Stream endpoints (/v1/stream/video, /v1/stream/audio) additionally accept
+a short-lived ?stream_token=<signed> query parameter (see ADR-001).
 
 Running locally (development):
     uvicorn src.backend.main:app --reload --port 8000
@@ -38,8 +41,10 @@ from fastapi.websockets import WebSocket, WebSocketDisconnect
 
 from .auth import (
     create_access_token,
+    create_stream_token,
     require_jwt,
     require_jwt_ws,
+    require_stream_auth,
     security,
     verify_basic_credentials,
 )
@@ -184,6 +189,60 @@ async def issue_token(
     }
 
 
+@app.post(
+    "/v1/auth/stream-token",
+    tags=["auth"],
+    summary="Issue short-lived stream token",
+    response_description="Signed stream token for query-param auth on stream endpoints",
+    responses={
+        200: {
+            "description": "Stream token issued",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "stream_token": "eyJzdWIiOiJhZG1pbiIsImlhdCI6MTc0...",
+                        "expires_in": 60,
+                    }
+                }
+            },
+        },
+        401: {"description": "Missing or invalid Bearer JWT"},
+    },
+)
+async def issue_stream_token(
+    claims: Annotated[dict, Depends(require_jwt)],
+) -> dict[str, Any]:
+    """
+    Issue a short-lived HMAC-SHA256 stream token for use as a query parameter
+    on the video and audio stream endpoints.
+
+    **Why this endpoint exists (ADR-001)**:
+    Browsers cannot attach `Authorization: Bearer` headers to `<img src="...">` or
+    `<audio src="...">` requests.  Call this endpoint first (with your existing
+    Bearer JWT), receive a 60-second token, and append it as:
+
+        GET /v1/stream/video?stream_token=<token>
+
+    **Token TTL**: 60 seconds (configured via `STREAM_TOKEN_TTL_SECONDS`).
+    Refresh it before expiry — the frontend should request a new token every
+    50 seconds to maintain a continuous stream without re-authentication gaps.
+
+    **Token scope**: the token is tied to the authenticated user (`sub` claim).
+    It is not single-use; a new connection opened within the TTL window using
+    the same token is accepted.  Treat it like a short-lived password — do not
+    log or persist it.
+
+    Requires: `Authorization: Bearer <jwt>` header.
+    """
+    settings = get_settings()
+    subject = claims.get("sub", "")
+    token = create_stream_token(subject=subject)
+    return {
+        "stream_token": token,
+        "expires_in": settings.stream_token_ttl_seconds,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Video stream                                                                 #
 # --------------------------------------------------------------------------- #
@@ -196,18 +255,25 @@ async def issue_token(
     response_description="multipart/x-mixed-replace MJPEG stream",
     responses={
         200: {"content": {"multipart/x-mixed-replace": {}}},
-        401: {"description": "Missing or invalid JWT"},
+        401: {"description": "Missing or invalid token (Bearer JWT or stream_token)"},
         503: {"description": "Camera unavailable"},
     },
 )
 async def stream_video(
-    claims: Annotated[dict, Depends(require_jwt)],
+    claims: Annotated[dict, Depends(require_stream_auth)],
 ) -> StreamingResponse:
     """
     Stream live MJPEG video from the Pi camera.
 
     The response is a multipart/x-mixed-replace stream.  Set this URL as the
     `src` of an `<img>` element in the browser — no JavaScript required.
+
+    **Authentication** (either is accepted):
+    - `Authorization: Bearer <jwt>` header (existing curl/test usage)
+    - `?stream_token=<signed>` query parameter (browser `<img src>` usage — see ADR-001)
+
+    Obtain a stream token from `POST /v1/auth/stream-token`.
+    Token validation is performed once on connection, not per frame.
 
     Target: >= 15 fps at 640x480, <= 1 second end-to-end latency on LAN.
     Returns 503 if the camera cannot be opened.
@@ -251,18 +317,25 @@ async def stream_video(
     response_description="Chunked audio/L16 PCM stream",
     responses={
         200: {"content": {"audio/L16": {}}},
-        401: {"description": "Missing or invalid JWT"},
+        401: {"description": "Missing or invalid token (Bearer JWT or stream_token)"},
         503: {"description": "Microphone unavailable"},
     },
 )
 async def stream_audio(
-    claims: Annotated[dict, Depends(require_jwt)],
+    claims: Annotated[dict, Depends(require_stream_auth)],
 ) -> StreamingResponse:
     """
     Stream live audio from the USB microphone as raw 16-bit signed PCM.
 
     The response is a chunked Transfer-Encoding stream with Content-Type
     audio/L16 (RFC 2586).  Use the Web Audio API on the client to decode.
+
+    **Authentication** (either is accepted):
+    - `Authorization: Bearer <jwt>` header (existing curl/test usage)
+    - `?stream_token=<signed>` query parameter (browser usage — see ADR-001)
+
+    Obtain a stream token from `POST /v1/auth/stream-token`.
+    Token validation is performed once on connection, not per frame.
 
     Returns 503 if the microphone cannot be opened.
     """

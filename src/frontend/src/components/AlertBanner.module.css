@@ -1,0 +1,188 @@
+/*
+ * AlertBanner.module.css
+ *
+ * Night-friendly alert panel styles.
+ * Alert types use warm color accents without glare.
+ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+/* WS connection status badge */
+.wsStatus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.wsDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+[data-status="idle"]         .wsDot { background-color: var(--color-text-muted); }
+[data-status="connecting"]   .wsDot { background-color: var(--color-status-connecting);
+                                       animation: pulse 1.5s ease-in-out infinite; }
+[data-status="connected"]    .wsDot { background-color: var(--color-status-live); }
+[data-status="reconnecting"] .wsDot { background-color: var(--color-status-reconnecting);
+                                       animation: pulse 1s ease-in-out infinite; }
+[data-status="disconnected"] .wsDot { background-color: var(--color-status-disconnected); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.wsLabel {
+  font-size: var(--font-size-sm);
+}
+
+.clearButton {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  /* Ensure 44px minimum touch target */
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.clearButton:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+}
+
+/* ── Empty state ──────────────────────────────────────────────────── */
+
+.empty {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: var(--space-md) 0;
+}
+
+/* ── Alert list ───────────────────────────────────────────────────── */
+
+.alertList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.alertItem {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
+  background-color: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid transparent;
+  overflow: hidden;
+  /* Gentle slide-in for new alerts */
+  animation: slideIn 250ms ease forwards;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Alert type accent colors on the left border */
+[data-type="cry"]    { border-left-color: var(--color-alert-cry); }
+[data-type="motion"] { border-left-color: var(--color-alert-motion); }
+
+.alertIcon {
+  font-size: var(--font-size-base);
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.alertBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.alertType {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.alertMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.confidence {
+  font-variant-numeric: tabular-nums;
+}
+
+.separator {
+  color: var(--color-text-muted);
+}
+
+.alertTime {
+  color: var(--color-text-muted);
+}
+
+/* Thin confidence bar running across the bottom of the item */
+.confidenceBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: var(--confidence, 0%);
+  opacity: 0.4;
+}
+
+[data-type="cry"]    .confidenceBar { background-color: var(--color-alert-cry); }
+[data-type="motion"] .confidenceBar { background-color: var(--color-alert-motion); }
+
+/* ── Overflow note ────────────────────────────────────────────────── */
+
+.overflow {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  padding-top: var(--space-xs);
+}

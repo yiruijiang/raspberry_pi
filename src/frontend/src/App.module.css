@@ -1,0 +1,106 @@
+/*
+ * App.module.css
+ *
+ * Dashboard layout — mobile-first, then two-column on tablet+.
+ *
+ * Mobile  (< 768px):  header / feed / alerts stacked vertically.
+ * Tablet  (≥ 768px):  feed takes ~60% width, alerts the remaining ~40%.
+ * Desktop (≥ 1280px): same two-column but with larger gap and padding.
+ */
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg);
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  /* Keeps header in view when the feed is tall on mobile */
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.appTitle {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.logoutButton {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: var(--space-xs) var(--space-md);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.logoutButton:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+}
+
+/* ── Dashboard ──────────────────────────────────────────────────── */
+
+.dashboard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+/* Feed section takes its natural aspect-ratio height on mobile */
+.feedSection {
+  width: 100%;
+}
+
+.videoStream {
+  width: 100%;
+}
+
+/* ── Tablet (≥ 768px) — side-by-side layout ─────────────────────── */
+@media (min-width: 768px) {
+  .dashboard {
+    flex-direction: row;
+    align-items: flex-start;
+    padding: var(--space-lg);
+    gap: var(--space-lg);
+  }
+
+  .feedSection {
+    flex: 3; /* ~60% */
+    min-width: 0; /* allow flex shrink below intrinsic size */
+  }
+
+  /* Alert panel takes remaining space */
+  .dashboard > :last-child {
+    flex: 2; /* ~40% */
+    min-width: 0;
+  }
+}
+
+/* ── Desktop (≥ 1280px) ─────────────────────────────────────────── */
+@media (min-width: 1280px) {
+  .dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+    gap: var(--space-xl);
+  }
+}

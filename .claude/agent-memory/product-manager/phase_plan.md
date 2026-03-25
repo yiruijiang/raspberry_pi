@@ -21,6 +21,8 @@ criteria are met. Within a phase, dispatch parallel tasks simultaneously.
 
 ## Phase 2 — ML Alerts (entry: Phase 1 done)
 - TASK-201 ml-engineer Cry detection pipeline [PARALLEL] — CRITICAL PATH, Large
+  — UNBLOCKED 2026-03-25: ADR-002 accepted YAMNet fine-tune path; full step-by-step
+    task doc written; ml-engineer may proceed immediately
 - TASK-202 ml-engineer Motion detection pipeline [PARALLEL]
 - TASK-203 backend-engineer Alert ingestion + WS broadcast [after 201+202 schema finalized]
 - TASK-204 frontend-engineer Alert feed UI [after 203]
@@ -35,9 +37,19 @@ criteria are met. Within a phase, dispatch parallel tasks simultaneously.
 Critical path: 101→103→[P1]→201→203→204→[P2]→301→303→[P3 done]
 Longest pole: TASK-201 (cry detection, Large). Start immediately when Phase 2 opens.
 
+## Phase 1 Task Additions (2026-03-25)
+- TASK-105 backend-engineer Stream token endpoint [PARALLEL with TASK-103 dev,
+  sequential before TASK-103 integration] — Small — added to unblock TASK-103
+
 ## Open Questions (unresolved at spec time)
 1. ROI for motion detection vs full-frame diff
 2. 500ms ML-to-browser latency — sufficient for safety use case?
 3. Alert history persistence: SQLite vs in-memory for v1
 4. MJPEG vs WebRTC for Phase 1 video
-5. Authentication on stream endpoints (LAN-only but still open)
+5. ~~Authentication on stream endpoints~~ RESOLVED: signed URL tokens (ADR-001)
+
+## ADR log
+- ADR-001: Video stream auth — signed URL tokens
+- ADR-002 (2026-03-25): TFLite model source — YAMNet fine-tune chosen over custom
+  model from scratch. Rationale: Phase 2 timeline, achievable acceptance criteria,
+  on-device inference. Fallback to custom model if fine-tune fails two iterations.

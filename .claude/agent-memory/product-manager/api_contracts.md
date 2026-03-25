@@ -31,5 +31,20 @@ Forwards ML events as-is (same JSON schema).
 On new client connect: server sends last 50 buffered events.
 
 ## Backend HTTP Streaming
-- `GET /stream/video` — multipart MJPEG (`Content-Type: multipart/x-mixed-replace`)
-- `GET /stream/audio` — chunked Ogg/Opus or PCM, browser-playable
+- `GET /v1/stream/video` — multipart MJPEG (`Content-Type: multipart/x-mixed-replace`)
+  Protected: requires `?stream_token=<signed>` query param (see ADR-001).
+- `GET /v1/stream/audio` — chunked Ogg/Opus or PCM, browser-playable
+  Protected: same `?stream_token=<signed>` mechanism as video.
+
+## Stream Token Auth (ADR-001, 2026-03-25)
+Browsers cannot send Bearer headers on `<img src>`. Signed URL tokens used instead.
+
+`POST /v1/auth/stream-token`
+- Request: `Authorization: Bearer <jwt>`, no body
+- Response 200: `{ "stream_token": "<signed>", "expires_in": 60 }`
+- Response 401: invalid/expired JWT
+
+Token TTL: 60 seconds. Frontend refreshes at 50 seconds.
+Token is validated on stream connection establishment only (not per frame).
+Signing algorithm: HMAC-SHA256, server-side secret (backend documents in design doc).
+Tokens are not single-use; re-use within TTL window is permitted.

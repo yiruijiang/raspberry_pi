@@ -136,6 +136,24 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # Stream token (signed URL auth for MJPEG/audio streams)              #
+    # ------------------------------------------------------------------ #
+    stream_token_secret: str | None = Field(
+        default=None,
+        description=(
+            "HMAC-SHA256 secret used to sign short-lived stream tokens. "
+            "Defaults to jwt_secret if not set. "
+            "Set STREAM_TOKEN_SECRET to rotate independently of the JWT secret."
+        ),
+    )
+    stream_token_ttl_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=3600,
+        description="Stream token validity window in seconds (default 60).",
+    )
+
+    # ------------------------------------------------------------------ #
     # Rate limiting                                                        #
     # ------------------------------------------------------------------ #
     rate_limit_unauthenticated: int = Field(

@@ -9,9 +9,16 @@ info:
     require a Bearer JWT in the `Authorization` header.  WebSocket endpoints
     accept the token as a `?token=` query parameter.
 
-    **Obtain a token**: `POST /v1/auth/token` with HTTP Basic credentials
+    **Stream endpoints** (`/v1/stream/video`, `/v1/stream/audio`) additionally
+    accept a short-lived signed token as `?stream_token=<token>` (see ADR-001).
+    This allows browser `<img src="...">` usage where custom headers are unavailable.
+
+    **Obtain a JWT**: `POST /v1/auth/token` with HTTP Basic credentials
     (username/password configured via `MONITOR_USERNAME` / `MONITOR_PASSWORD`
     environment variables on the Pi).
+
+    **Obtain a stream token**: `POST /v1/auth/stream-token` with a valid Bearer JWT.
+    Stream tokens expire in 60 seconds; refresh every ~50 seconds to keep streams alive.
 
 servers:
   - url: "http://raspberrypi.local:8000"
@@ -46,6 +53,21 @@ components:
       description: "Used only on POST /v1/auth/token to obtain a JWT"
 
   schemas:
+    StreamTokenResponse:
+      type: object
+      required: [stream_token, expires_in]
+      properties:
+        stream_token:
+          type: string
+          description: >
+            HMAC-SHA256 signed token. Append as ?stream_token=<value> to
+            /v1/stream/video or /v1/stream/audio.
+          example: "eyJzdWIiOiJhZG1pbiIsImlhdCI6MTc0..."
+        expires_in:
+          type: integer
+          description: Token validity window in seconds (default 60)
+          example: 60
+
     TokenResponse:
       type: object
       required: [access_token, token_type, expires_in]
@@ -194,6 +216,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /v1/auth/stream-token:
+    post:
+      tags: [auth]
+      operationId: issueStreamToken
+      summary: Issue short-lived stream token (ADR-001)
+      description: |
+        Exchange a valid Bearer JWT for a short-lived HMAC-SHA256 stream token.
+
+        **Use case**: browsers cannot attach `Authorization: Bearer` headers to
+        `<img src="...">` requests.  Use this token instead:
+
+        ```
+        const { stream_token } = await fetch('/v1/auth/stream-token', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${jwt}` }
+        }).then(r => r.json());
+
+        imgEl.src = `/v1/stream/video?stream_token=${stream_token}`;
+        ```
+
+        **TTL**: 60 seconds (controlled by `STREAM_TOKEN_TTL_SECONDS`).
+        Refresh every ~50 seconds to prevent the stream from going dark.
+
+        **Scope**: tied to the authenticated user's `sub` claim.
+        Not single-use — a new connection within the TTL window is accepted.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Stream token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamTokenResponse"
+        "401":
+          description: Missing or invalid Bearer JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /v1/stream/video:
     get:
       tags: [streaming]
@@ -205,6 +268,12 @@ paths:
         Set this URL as the `src` of an `<img>` element — the browser renders
         the stream natively with no JavaScript required.
 
+        **Authentication** (either is accepted):
+        - `Authorization: Bearer <jwt>` header
+        - `?stream_token=<signed>` query parameter (browser `<img src>` path — see ADR-001)
+
+        Token validation is performed once on connection, not per frame.
+
         Target performance:
         - >= 15 fps at 640×480
         - <= 1 second end-to-end latency on LAN
@@ -212,6 +281,15 @@ paths:
         Returns 503 if the camera backend cannot be opened.
       security:
         - BearerAuth: []
+      parameters:
+        - name: stream_token
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Short-lived HMAC-SHA256 signed token from POST /v1/auth/stream-token.
+            Required when Authorization header cannot be sent (e.g., <img src="...">).
       responses:
         "200":
           description: MJPEG multipart stream
@@ -221,7 +299,7 @@ paths:
                 type: string
                 format: binary
         "401":
-          description: Missing or invalid JWT
+          description: Missing or invalid token (Bearer JWT or stream_token)
           content:
             application/json:
               schema:
@@ -249,9 +327,24 @@ paths:
 
         Use the Web Audio API on the client to decode and play.
 
+        **Authentication** (either is accepted):
+        - `Authorization: Bearer <jwt>` header
+        - `?stream_token=<signed>` query parameter (browser usage — see ADR-001)
+
+        Token validation is performed once on connection, not per frame.
+
         Returns 503 if the microphone cannot be opened.
       security:
         - BearerAuth: []
+      parameters:
+        - name: stream_token
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Short-lived HMAC-SHA256 signed token from POST /v1/auth/stream-token.
+            Required when Authorization header cannot be sent (e.g., browser audio element).
       responses:
         "200":
           description: Chunked PCM audio stream
@@ -261,7 +354,7 @@ paths:
                 type: string
                 format: binary
         "401":
-          description: Missing or invalid JWT
+          description: Missing or invalid token (Bearer JWT or stream_token)
           content:
             application/json:
               schema:
